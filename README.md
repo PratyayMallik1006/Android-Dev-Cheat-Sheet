@@ -181,3 +181,235 @@ builder.setNegativeButton(``"No"``, (DialogInterface.OnClickListener) (dialog, w
 alert.show();
 
 ```
+
+# Saving Data Locally
+1. Storing
+```java
+private void saveDisplayName(){  
+	String displayName = mUsernameView.getText().toString();  
+	SharedPreferences prefs = getSharedPreferences(CHAT_PREFS,0);  
+	prefs.edit().putString(DISPLAY_NAME_KEY,displayName).apply();  
+}
+```
+2. Retriving
+```java
+private void setupDisplayName(){  
+	SharedPreferences prefs=getSharedPreferences(RegisterActivity.CHAT_PREFS,MODE_PRIVATE);
+	mDisplayName=prefs.getString(RegisterActivity.DISPLAY_NAME_KEY,null);  
+	  
+	if(mDisplayName == null) mDisplayName = "Anonymous";  
+}
+```
+# Firebase
+## Register user
+```java
+private FirebaseAuth mAuth;
+mAuth = FirebaseAuth.getInstance();
+
+String email = mEmailView.getText().toString();  
+String password = mPasswordView.getText().toString();  
+mAuth.createUserWithEmailAndPassword(email,password).addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {  
+    @Override  
+  public void onComplete(@NonNull Task<AuthResult> task) {  
+        Log.d("WhatsApp","createUser onComplete"+task.isSuccessful());  
+  
+ if(!task.isSuccessful()){  
+            Log.d("WhatsApp","user creation failed");  
+  }  
+    }  
+});
+```
+## Login User
+```java
+private FirebaseAuth mAuth;
+mAuth = FirebaseAuth.getInstance();
+
+private void attemptLogin() {  
+  
+    String email = mEmailView.getText().toString();  
+  String password = mPasswordView.getText().toString();  
+  
+ if(email.equals("") || password.equals("")) return;  
+  Toast.makeText(this, "Login in progress...",Toast.LENGTH_SHORT).show();  
+  
+  // TODO: Use FirebaseAuth to sign in with email & password  
+  mAuth.signInWithEmailAndPassword(email,password).addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {  
+        @Override  
+  public void onComplete(@NonNull Task<AuthResult> task) {  
+  
+            Log.d("WhatsApp","signInWithEmail() onComplete: "+task.getException());  
+  
+ if(!task.isSuccessful()){  
+                Log.d("WhatsApp","Problem signing in:"+task.getException());  
+  showErrorDialog("There was a problem signing in");  
+  } else {  
+                Intent intet=new Intent(LoginActivity.this,MainChatActivity.class);  
+  startActivity(intet);  
+  }  
+  
+        }  
+    });  
+  
+  
+  
+}
+```
+## Storing and retrieving from database
+1. InstanceMessage.java
+```java
+
+public class InstanceMessage {  
+	private String message;  
+	private String author;  
+	  
+	public InstanceMessage(String message, String author) {  
+		this.message = message;  
+		this.author = author;  
+	}  
+	  
+	public InstanceMessage() {  
+	}  
+	  
+	public String getMessage() {  
+		return message;  
+	}  
+	  
+	public String getAuthor() {  
+		return author;  
+	}
+}
+```
+2. ChatActivity.java
+```java
+private DatabaseReference mDatabaseReference;
+mDatabaseReference = FirebaseDatabase.getInstance().getReference();
+
+private void sendMessage() {  
+	String input = mInputText.getText().toString();  
+	if(!input.equals("")){  
+		InstanceMessage chat = new InstanceMessage(input,mDisplayName);  
+		mDatabaseReference.child("messages").push().setValue(chat);  
+		mInputText.setText("");    
+	}   
+}
+```
+3. Firebase>project> Realtime database> Rules:
+```json
+{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}
+```
+## Retrieving and retrieving from database
+1. chatListAdapter.java
+```java
+
+public class ChatListAdapter extends BaseAdapter {  
+  
+private Activity mActivity;  
+private DatabaseReference mDatabaseReference;  
+private String mDisplayName;  
+private ArrayList<DataSnapshot> mSnapshotList;  
+  
+private ChildEventListener mListener = new ChildEventListener() {  
+@Override  
+public void onChildAdded(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {  
+mSnapshotList.add(snapshot);  
+notifyDataSetChanged();  
+}  
+  
+@Override  
+public void onChildChanged(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {  
+  
+}  
+  
+@Override  
+public void onChildRemoved(@NonNull DataSnapshot snapshot) {  
+  
+}  
+  
+@Override  
+public void onChildMoved(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {  
+  
+}  
+  
+@Override  
+public void onCancelled(@NonNull DatabaseError error) {  
+  
+}  
+};  
+  
+public ChatListAdapter(Activity activity, DatabaseReference ref, String name){  
+	mActivity=activity;  
+	mDisplayName=name;  
+	mDatabaseReference=ref.child("messages");  
+	mDatabaseReference.addChildEventListener(mListener);  
+	  
+	mSnapshotList = new ArrayList<>();  
+	  
+  
+}  
+  
+static class ViewHolder{  
+	TextView authorName;  
+	TextView body;  
+	ViewGroup.LayoutParams params;  
+}  
+  
+  
+@Override  
+public int getCount() {  
+	return mSnapshotList.size();  
+}  
+  
+@Override  
+public InstanceMessage getItem(int position) {  
+	DataSnapshot snapshot = mSnapshotList.get(position);  
+	return snapshot.getValue(InstanceMessage.class);  
+}  
+  
+@Override  
+public long getItemId(int position) {  
+	return 0;  
+}  
+  
+@Override  
+public View getView(int position, View convertView, ViewGroup parent) {  
+if(convertView == null){  
+	LayoutInflater inflater=(LayoutInflater) mActivity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);  
+	convertView = inflater.inflate(R.layout.chat_msg_row,parent,false);  
+	final ViewHolder holder=new ViewHolder();  
+	holder.authorName=(TextView) convertView.findViewById(R.id.author);  
+	holder.body=(TextView) convertView.findViewById(R.id.message);  
+	holder.params=(LinearLayout.LayoutParams) holder.authorName.getLayoutParams();  
+	convertView.setTag(holder);  
+  
+}  
+final InstanceMessage message=getItem(position);  
+final ViewHolder holder=(ViewHolder) convertView.getTag();  
+  
+String author = message.getAuthor();  
+holder.authorName.setText(author);  
+  
+String msg = message.getMessage();  
+holder.body.setText(msg);  
+  
+return convertView;  
+}  
+  
+public void cleanup(){  
+mDatabaseReference.removeEventListener(mListener);  
+}  
+}
+```
+2. mainActivity.java
+```java
+private ChatListAdapter mAdapter;
+private DatabaseReference mDatabaseReference;
+
+mDatabaseReference= FirebaseDatabase.getInstance().getReference();
+mAdapter=new ChatListAdapter(this, mDatabaseReference,mDisplayName);  
+mChatListView.setAdapter(mAdapter);
+```
